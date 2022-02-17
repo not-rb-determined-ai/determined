@@ -289,36 +289,6 @@ func (a *apiServer) GetTrialCheckpoints(
 			errors.Wrapf(err, "error fetching checkpoints for trial %d from database", req.Id)
 	}
 
-	a.filter(&resp.Checkpoints, func(i int) bool {
-		v := resp.Checkpoints[i]
-
-		found := false
-		for _, state := range req.States {
-			if state == v.State {
-				found = true
-				break
-			}
-		}
-
-		if len(req.States) != 0 && !found {
-			return false
-		}
-
-		found = false
-		for _, state := range req.ValidationStates {
-			if state == v.ValidationState {
-				found = true
-				break
-			}
-		}
-
-		if len(req.ValidationStates) != 0 && !found {
-			return false
-		}
-
-		return true
-	})
-
 	a.sort(
 		resp.Checkpoints, req.OrderBy, req.SortBy, apiv1.GetTrialCheckpointsRequest_SORT_BY_BATCH_NUMBER)
 

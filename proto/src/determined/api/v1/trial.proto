@@ -101,10 +101,6 @@ message GetTrialCheckpointsRequest {
     SORT_BY_START_TIME = 7;
     // Returns checkpoints sorted by end time.
     SORT_BY_END_TIME = 8;
-    // Returns checkpoints sorted by validation state.
-    SORT_BY_VALIDATION_STATE = 15;
-    // Returns checkpoints sorted by state.
-    SORT_BY_STATE = 16;
   }
   // The trial id.
   int32 id = 1;
@@ -117,11 +113,6 @@ message GetTrialCheckpointsRequest {
   int32 offset = 4;
   // Limit the number of checkpoints. A value of 0 denotes no limit.
   int32 limit = 5;
-
-  // Limit the checkpoints to those that match the validation states.
-  repeated determined.checkpoint.v1.State validation_states = 6;
-  // Limit the checkpoints to those that match the states.
-  repeated determined.checkpoint.v1.State states = 7;
 }
 
 // Response to GetTrialCheckpointsRequest.

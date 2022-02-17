@@ -63,8 +63,4 @@ message Checkpoint {
   // (Future): Present only when a training originated from a Trial.  If
   // training.trial_id is zero the struct is empty.
   CheckpointTrainingData training = 7;
-
-  // TODO: delete these and fix the master so it still compiles.
-  State state = 8;
-  State validation_state = 9;
 }
