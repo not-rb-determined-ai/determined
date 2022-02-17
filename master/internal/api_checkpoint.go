@@ -10,22 +10,56 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/determined-ai/determined/master/internal/db"
+	"github.com/determined-ai/determined/master/pkg/protoutils"
 	"github.com/determined-ai/determined/proto/pkg/apiv1"
 	"github.com/determined-ai/determined/proto/pkg/checkpointv1"
 )
 
 func (a *apiServer) GetCheckpoint(
 	_ context.Context, req *apiv1.GetCheckpointRequest) (*apiv1.GetCheckpointResponse, error) {
-	resp := &apiv1.GetCheckpointResponse{}
-	resp.Checkpoint = &checkpointv1.Checkpoint{}
-	switch err := a.m.db.QueryProto("get_checkpoint", resp.Checkpoint, req.CheckpointUuid); err {
+	ckpt, err := a.m.db.RBCheckpoint(req.CheckpointUuid);
+	switch err {
+	case nil:
 	case db.ErrNotFound:
 		return nil, status.Errorf(
 			codes.NotFound, "checkpoint %s not found", req.CheckpointUuid)
 	default:
-		return resp,
+		return nil,
 			errors.Wrapf(err, "error fetching checkpoint %s from database", req.CheckpointUuid)
 	}
+	resp := &apiv1.GetCheckpointResponse{}
+
+	nilToStr := func(v *string) string {
+		if v == nil {
+			return ""
+		}
+		return *v
+	}
+
+	pc := protoutils.ProtoConverter{}
+
+	resp.Checkpoint = &checkpointv1.Checkpoint{
+		TaskId: nilToStr(ckpt.TaskID),
+		AllocationId: nilToStr(ckpt.AllocationID),
+		Uuid: ckpt.UUID,
+		ReportTime: pc.ToTimestamp(ckpt.ReportTime),
+		Resources: ckpt.Resources,
+		Metadata: pc.ToStruct(ckpt.Metadata, "metadata"),
+		Training: &checkpointv1.CheckpointTrainingData{
+			TrialId: int32(ckpt.Training.TrialID),
+			ExperimentId: int32(ckpt.Training.ExperimentID),
+			ExperimentConfig: pc.ToStruct(ckpt.Training.ExperimentConfig, "experiment config"),
+			Hparams: pc.ToStruct(ckpt.Training.Hparams, "hparams"),
+			TrainingMetrics: pc.ToStruct(ckpt.Training.TrainingMetrics, "training metrics"),
+			ValidationMetrics: pc.ToStruct(ckpt.Training.ValidationMetrics, "validation metrics"),
+		},
+	}
+
+	if pc.Error() != nil {
+		return nil, pc.Error()
+	}
+
+	return resp, nil
 }
 
 func (a *apiServer) PostCheckpointMetadata(

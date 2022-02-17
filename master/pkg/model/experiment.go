@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/json"
 
 	"github.com/determined-ai/determined/master/pkg/protoutils"
 
@@ -420,6 +421,50 @@ type Checkpoint struct {
 	Framework         string     `db:"framework" json:"framework"`
 	Format            string     `db:"format" json:"format"`
 	DeterminedVersion string     `db:"determined_version" json:"determined_version"`
+}
+
+// Resources maps filenames to file sizes.
+type Resources map[string]int64
+
+// Scan converts jsonb from postgres into a Resources object.
+// TODO: Combine all json.unmarshal-based Scanners into a single Scan implementation.
+func (j *Resources) Scan(src interface{}) error {
+	if src == nil {
+		*j = nil
+		return nil
+	}
+	bytes, ok := src.([]byte)
+	if !ok {
+		return errors.Errorf("unable to convert to []byte: %v", src)
+	}
+	obj := make(map[string]int64)
+	if err := json.Unmarshal(bytes, &obj); err != nil {
+		return errors.Wrapf(err, "unable to unmarshal JSONObj: %v", src)
+	}
+	*j = Resources(obj)
+	return nil
+}
+
+
+type RBCheckpointTrainingData struct {
+	TrialID           int
+	ExperimentID      int
+	ExperimentConfig  JSONObj
+	Hparams           JSONObj
+	TrainingMetrics   JSONObj
+	ValidationMetrics JSONObj
+}
+
+// RBCheckpoint is rb's checkpoint.
+type RBCheckpoint struct {
+	ID                int                       `db:"id" json:"id"`
+	UUID              string                    `db:"uuid" json:"uuid"`
+	TaskID            *string                   `db:"trial_id" json:"task_id"`
+	AllocationID      *string                   `db:"trial_id" json:"task_id"`
+	ReportTime        time.Time                 `db:"end_time" json:"report_time"`
+	Resources         Resources                 `db:"resources" json:"resources"`
+	Metadata          JSONObj                   `db:"metadata" json:"metadata"`
+	Training          RBCheckpointTrainingData
 }
 
 // TrialLog represents a row from the `trial_logs` table.

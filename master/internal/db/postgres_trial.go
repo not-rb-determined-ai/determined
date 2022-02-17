@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"context"
 	"fmt"
 	"strings"
@@ -525,6 +526,58 @@ LIMIT 1`, &checkpoint, trialID); errors.Cause(err) == ErrNotFound {
 		return nil, nil
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "error querying for latest trial checkpoint (%v)", trialID)
+	}
+	return &checkpoint, nil
+}
+
+func (db *PgDB) RBCheckpoint(uuid string) (*model.RBCheckpoint, error) {
+	var checkpoint model.RBCheckpoint
+	if err := db.sql.QueryRowx(`
+SELECT
+	c.uuid,
+	t.task_id,
+	c.end_time as report_time,
+	c.resources,
+	-- construct a metadata json from the user's metadata plus our training-specific fields that the
+	-- TrialControllers inject when creating checkpoints.  Those values used to be "system" values,
+	-- but since the release of Core API, the TrialControllers are no longer part of the system
+	-- proper but are considered userspace tools.
+	jsonb_build_object(
+		'latest_batch', c.total_batches,
+		'framework', c.framework,
+		'determined_version', c.determined_version
+	) || c.metadata as metadata,
+	-- .Training substruct
+	c.trial_id,
+	t.experiment_id,
+	e.config,
+	t.hparams,
+	s.metrics,
+	v.metrics
+FROM checkpoints AS c
+LEFT JOIN validations AS v on c.total_batches = v.total_batches and c.trial_id = v.trial_id
+LEFT JOIN steps AS s on c.total_batches = s.total_batches and c.trial_id = s.trial_id
+LEFT JOIN trials AS t on c.trial_id = t.id
+LEFT JOIN experiments AS e on t.experiment_id = e.id
+WHERE c.uuid = $1
+	`, uuid).Scan(
+		&checkpoint.UUID,
+		&checkpoint.TaskID,
+		// Old checkpoints did not track the allocation from whence they came.
+		// &checkpoint.AllocationID,
+		&checkpoint.ReportTime,
+		&checkpoint.Resources,
+		&checkpoint.Metadata,
+		&checkpoint.Training.TrialID,
+		&checkpoint.Training.ExperimentID,
+		&checkpoint.Training.ExperimentConfig,
+		&checkpoint.Training.Hparams,
+		&checkpoint.Training.TrainingMetrics,
+		&checkpoint.Training.ValidationMetrics,
+	); err == sql.ErrNoRows {
+		return nil, nil
+	} else if err != nil {
+		return nil, errors.Wrapf(err, "error querying for checkpoint(%v)", uuid)
 	}
 	return &checkpoint, nil
 }

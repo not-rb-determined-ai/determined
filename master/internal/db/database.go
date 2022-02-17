@@ -173,6 +173,7 @@ type DB interface {
 	DeleteTrialLogs(ids []int) error
 	TrialLogsCount(trialID int, fs []api.Filter) (int, error)
 	TrialLogsFields(trialID int) (*apiv1.TrialLogsFieldsResponse, error)
+	RBCheckpoint(uuid string) (*model.RBCheckpoint, error)
 }
 
 // ErrNotFound is returned if nothing is found.
