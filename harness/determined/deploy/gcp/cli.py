@@ -303,6 +303,22 @@ args_description = Cmd(
                             "(previously, GPU) resource pool",
                         ),
                         Arg(
+                            "--compute-agent-disk-type",
+                            "--gpu-agent-disk-type",
+                            type=str,
+                            default=constants.defaults.COMPUTE_AGENT_DISK_TYPE,
+                            help="disk type for agents in the compute "
+                            "(previously, GPU) resource pool",
+                        ),
+                        Arg(
+                            "--compute-agent-disk-size",
+                            "--gpu-agent-disk-size",
+                            type=str,
+                            default=constants.defaults.COMPUTE_AGENT_DISK_SIZE,
+                            help="disk size for agents in the compute "
+                            "(previously, GPU) resource pool",
+                        ),
+                        Arg(
                             "--aux-agent-instance-type",
                             "--cpu-agent-instance-type",
                             type=str,

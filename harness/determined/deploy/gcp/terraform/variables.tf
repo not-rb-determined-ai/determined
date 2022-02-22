@@ -83,6 +83,16 @@ variable "compute_agent_instance_type" {
   default = "n1-standard-32"
 }
 
+variable "compute_agent_disk_type" {
+  type = string
+  default = "pd-standard"
+}
+
+variable "compute_agent_disk_size" {
+  type = string
+  default = "200"
+}
+
 variable "gpu_type" {
   type = string
   default = "nvidia-tesla-k80"

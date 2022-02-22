@@ -70,6 +70,8 @@ resource "google_compute_instance" "master_instance" {
             preemptible: ${var.preemptible}
       gcp:
         boot_disk_source_image: projects/determined-ai/global/images/${var.environment_image}
+        boot_disk_size: ${var.compute_agent_disk_size}
+        boot_disk_type: ${var.compute_agent_disk_type}
         agent_docker_image: ${var.image_repo_prefix}/determined-agent:${var.det_version}
         master_url: ${var.scheme}://internal-ip:${var.port}
         agent_docker_network: ${var.agent_docker_network}
@@ -171,6 +173,8 @@ resource "google_compute_instance" "agent_instance" {
   boot_disk {
     initialize_params {
       image = "projects/determined-ai/global/images/${var.environment_image}"
+      type = var.compute_agent_disk_type
+      size = var.compute_agent_disk_size
     }
   }
 

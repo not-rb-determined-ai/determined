@@ -2,6 +2,8 @@ class defaults:
 
     AUX_AGENT_INSTANCE_TYPE = "n1-standard-4"
     COMPUTE_AGENT_INSTANCE_TYPE = "n1-standard-32"
+    COMPUTE_AGENT_DISK_TYPE = "pd-standard"
+    COMPUTE_AGENT_DISK_SIZE = "200"
     DB_PASSWORD = "postgres"
     ENVIRONMENT_IMAGE = "det-environments-5158dec"
     GPU_NUM = 8

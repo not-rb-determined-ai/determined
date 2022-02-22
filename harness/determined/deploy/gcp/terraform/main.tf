@@ -158,6 +158,8 @@ module "compute" {
   agent_docker_network = var.agent_docker_network
   aux_agent_instance_type = var.aux_agent_instance_type
   compute_agent_instance_type = var.compute_agent_instance_type
+  compute_agent_disk_type = var.compute_agent_disk_type
+  compute_agent_disk_size = var.compute_agent_disk_size
   max_aux_containers_per_agent = var.max_aux_containers_per_agent
   max_idle_agent_period = var.max_idle_agent_period
   max_agent_starting_period = var.max_agent_starting_period

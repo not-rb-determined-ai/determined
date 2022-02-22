@@ -64,6 +64,12 @@ variable "aux_agent_instance_type" {
 variable "compute_agent_instance_type" {
 }
 
+variable "compute_agent_disk_type" {
+}
+
+variable "compute_agent_disk_size" {
+}
+
 variable "gpu_type" {
 }
 

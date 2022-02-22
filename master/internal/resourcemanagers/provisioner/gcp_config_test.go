@@ -61,6 +61,7 @@ func TestUnmarshalGCPClusterConfig(t *testing.T) {
 			Project:             "test-project",
 			Zone:                "test-zone",
 			BootDiskSize:        100,
+			BootDiskType:        "pd-standard",
 			BootDiskSourceImage: "test-source_image",
 			LabelKey:            "test-label-key",
 			LabelValue:          "test-label-value",
