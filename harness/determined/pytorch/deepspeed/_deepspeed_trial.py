@@ -60,7 +60,7 @@ class DeepSpeedTrialController(det.TrialController):
     ) -> None:
         # DeepSpeed's init_distributed handles situations in which only 1 gpu is used and
         # also handles multiple calls to init in one process.
-        deepspeed.init_distributed()
+        deepspeed.init_distributed(auto_mpi_discovery=False)
 
         # Set identical random seeds on all training processes.
         # When data parallel world size > 1, each data parallel rank will start at a unique
@@ -482,6 +482,12 @@ class DeepSpeedTrialController(det.TrialController):
             # and no pipeline parallel when building the datalaoders.
             vld_metrics = self.trial.evaluate_batch(validation_iterator, idx)
             if self.context.mpu.should_report_metrics():
+                if not isinstance(vld_metrics, dict):
+                    raise det.errors.InvalidExperimentException(
+                        "validation_metrics() must return a "
+                        "dictionary of string names to Tensor "
+                        "metrics",
+                    )
                 # Verify validation metric names are the same across batches.
                 if keys is None:
                     keys = vld_metrics.keys()
@@ -490,12 +496,6 @@ class DeepSpeedTrialController(det.TrialController):
                         raise det.errors.InvalidExperimentException(
                             "Validation metric names must match across all batches of data.",
                         )
-                if not isinstance(vld_metrics, dict):
-                    raise det.errors.InvalidExperimentException(
-                        "validation_metrics() must return a "
-                        "dictionary of string names to Tensor "
-                        "metrics",
-                    )
                 # TODO: For performance perform -> cpu() only at the end of validation.
                 batch_metrics.append(pytorch._convert_metrics_to_numpy(vld_metrics))
             if self.env.test_mode:

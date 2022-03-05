@@ -1,4 +1,4 @@
-name: cifar10_pytorch_distributed
+name: cifar10_zero_deepspeed
 debug: false
 hyperparameters:
   global_batch_size: 64

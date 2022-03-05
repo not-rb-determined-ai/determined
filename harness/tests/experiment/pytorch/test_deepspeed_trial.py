@@ -1,6 +1,12 @@
 # type: ignore
+import copy
+import os
 import pathlib
+from typing import Any, Dict, Optional
 
+import pytest
+
+import determined
 from determined import workload
 from tests.experiment import utils  # noqa: I100
 from tests.experiment.fixtures import deepspeed_linear_model
@@ -23,7 +29,16 @@ deepspeed_config = {
     },
 }
 
+# These environment variables are usually set by the launcher but we set them manually here
+# since they are required by deepspeed.
+os.environ["RANK"] = "0"
+os.environ["LOCAL_RANK"] = "0"
+os.environ["WORLD_SIZE"] = "1"
+os.environ["MASTER_ADDR"] = "localhost"
+os.environ["MASTER_PORT"] = "29500"
 
+
+@pytest.mark.gpu
 class TestDeepSpeedTrial:
     def setup_method(self) -> None:
         # This training setup is not guaranteed to converge in general,
@@ -33,22 +48,26 @@ class TestDeepSpeedTrial:
         self.hparams = {
             "global_batch_size": 16,
             "deepspeed_config": deepspeed_config,
-            "disable_dataset_reproducibility_checks": False,
-            "disable_auto_grad_accumulation": False,
+            "test_manual_dataloader": False,
+            "test_fail_dataset_repro_check": False,
+            "test_manual_grad_acc": False,
+            "test_fail_manual_grad_acc": False,
             "return_non_scalar_metrics": False,
             "test_custom_reducer": False,
         }
+        self.data_parallel_only_auto_train_batch_calls = (
+            deepspeed_config["train_batch_size"]
+            // deepspeed_config["train_micro_batch_size_per_gpu"]
+        )
 
     def test_linear_model(self) -> None:
         def make_workloads() -> workload.Stream:
             trainer = utils.TrainAndValidate()
-            train_batch_calls = (
-                deepspeed_config["train_batch_size"]
-                / deepspeed_config["train_micro_batch_size_per_gpu"]
-            )
 
             yield from trainer.send(
-                steps=10, validation_freq=10, train_batch_calls=train_batch_calls
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
             )
             training_metrics, validation_metrics = trainer.result()
 
@@ -58,6 +77,235 @@ class TestDeepSpeedTrial:
         controller = utils.make_trial_controller_from_trial_implementation(
             trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
             hparams=self.hparams,
+            workloads=make_workloads(),
+            trial_seed=self.trial_seed,
+            expose_gpus=True,
+        )
+        controller.run()
+
+    def test_manual_grad_acc_metrics(self) -> None:
+        updated_hparams = copy.deepcopy(self.hparams)
+        updated_hparams["test_manual_grad_acc"] = True
+
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(steps=10, validation_freq=10, train_batch_calls=1)
+            training_metrics, validation_metrics = trainer.result()
+
+            for metrics in validation_metrics:
+                assert "loss" in metrics
+
+        controller = utils.make_trial_controller_from_trial_implementation(
+            trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+            hparams=updated_hparams,
+            workloads=make_workloads(),
+            trial_seed=self.trial_seed,
+            expose_gpus=True,
+        )
+        controller.run()
+
+    def test_fail_manual_grad_acc_metrics(self) -> None:
+        updated_hparams = copy.deepcopy(self.hparams)
+        updated_hparams["test_fail_manual_grad_acc"] = True
+
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(steps=10, validation_freq=10, train_batch_calls=1)
+            training_metrics, validation_metrics = trainer.result()
+
+            for metrics in validation_metrics:
+                assert "loss" in metrics
+
+        with pytest.raises(AssertionError):
+            controller = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+                hparams=updated_hparams,
+                workloads=make_workloads(),
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+            controller.run()
+
+    def test_custom_dataloader(self) -> None:
+        updated_hparams = copy.deepcopy(self.hparams)
+        updated_hparams["test_manual_dataloader"] = True
+
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+            training_metrics, validation_metrics = trainer.result()
+
+            for metrics in validation_metrics:
+                assert "loss" in metrics
+
+        controller = utils.make_trial_controller_from_trial_implementation(
+            trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+            hparams=updated_hparams,
+            workloads=make_workloads(),
+            trial_seed=self.trial_seed,
+            expose_gpus=True,
+        )
+        controller.run()
+
+    def test_fail_dataset_repro_check(self) -> None:
+        updated_hparams = copy.deepcopy(self.hparams)
+        updated_hparams["test_fail_dataset_repro_check"] = True
+
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+            training_metrics, validation_metrics = trainer.result()
+
+            for metrics in validation_metrics:
+                assert "loss" in metrics
+
+        with pytest.raises(RuntimeError):
+            controller = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+                hparams=updated_hparams,
+                workloads=make_workloads(),
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+            controller.run()
+
+    def test_invalid_valid_dataset(self) -> None:
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+
+        with pytest.raises(determined.errors.InvalidExperimentException):
+            _ = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.InvalidValidDatasetTrial,
+                hparams=self.hparams,
+                workloads=make_workloads(),
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+
+    def test_invalid_train_metric(self) -> None:
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+
+        with pytest.raises(determined.errors.InvalidExperimentException):
+            controller = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.InvalidTrainMetricTrial,
+                hparams=self.hparams,
+                workloads=make_workloads(),
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+            controller.run()
+
+    def test_invalid_valid_metric(self) -> None:
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+
+        with pytest.raises(determined.errors.InvalidExperimentException):
+            controller = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.InvalidValidMetricTrial,
+                hparams=self.hparams,
+                workloads=make_workloads(),
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+            controller.run()
+
+    def test_differing_valid_metric_keys(self) -> None:
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+
+        with pytest.raises(determined.errors.InvalidExperimentException):
+            controller = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.DifferingValidMetricKeyTrial,
+                hparams=self.hparams,
+                workloads=make_workloads(),
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+            controller.run()
+
+    def test_custom_reducer(self) -> None:
+        updated_hparams = copy.deepcopy(self.hparams)
+        updated_hparams["test_custom_reducer"] = True
+
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+            training_metrics, validation_metrics = trainer.result()
+
+            for metrics in validation_metrics:
+                assert "loss" in metrics
+
+        controller = utils.make_trial_controller_from_trial_implementation(
+            trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+            hparams=updated_hparams,
+            workloads=make_workloads(),
+            trial_seed=self.trial_seed,
+            expose_gpus=True,
+        )
+        controller.run()
+
+    def test_linear_non_scalar_metrics(self) -> None:
+        updated_hparams = copy.deepcopy(self.hparams)
+        updated_hparams["return_non_scalar_metrics"] = True
+
+        def make_workloads() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+
+            yield from trainer.send(
+                steps=10,
+                validation_freq=10,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+            training_metrics, validation_metrics = trainer.result()
+
+            for metrics in validation_metrics:
+                assert "loss" in metrics
+
+        controller = utils.make_trial_controller_from_trial_implementation(
+            trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+            hparams=updated_hparams,
             workloads=make_workloads(),
             trial_seed=self.trial_seed,
             expose_gpus=True,
@@ -87,12 +335,11 @@ class TestDeepSpeedTrial:
         def make_workloads() -> workload.Stream:
             trainer = utils.TrainAndValidate()
 
-            train_batch_calls = (
-                deepspeed_config["train_batch_size"]
-                / deepspeed_config["train_micro_batch_size_per_gpu"]
+            yield from trainer.send(
+                steps=1,
+                validation_freq=1,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
             )
-
-            yield from trainer.send(steps=1, validation_freq=1, train_batch_calls=train_batch_calls)
             training_metrics, validation_metrics = trainer.result()
 
             for metrics in validation_metrics:
@@ -107,6 +354,89 @@ class TestDeepSpeedTrial:
             expose_gpus=True,
         )
         controller.run()
+
+    def test_checkpointing_and_restoring(self, tmp_path: pathlib.Path) -> None:
+        def make_trial_controller_fn(
+            workloads: workload.Stream,
+            checkpoint_dir: Optional[str] = None,
+            latest_checkpoint: Optional[Dict[str, Any]] = None,
+            latest_batch: int = 0,
+        ) -> determined.TrialController:
+            return utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.LinearPipelineEngineTrial,
+                hparams=self.hparams,
+                workloads=workloads,
+                trial_seed=self.trial_seed,
+                checkpoint_dir=checkpoint_dir,
+                latest_checkpoint=latest_checkpoint,
+                latest_batch=latest_batch,
+                expose_gpus=True,
+            )
+
+        utils.checkpointing_and_restoring_test(make_trial_controller_fn, tmp_path)
+
+    def test_restore_invalid_checkpoint(self, tmp_path: pathlib.Path) -> None:
+        # Build, train, and save a checkpoint with the normal hyperparameters.
+        checkpoint_dir = str(tmp_path.joinpath("checkpoint"))
+        latest_checkpoint = None
+        latest_batch = 0
+
+        def make_workloads_1() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+            yield from trainer.send(
+                steps=1,
+                validation_freq=1,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+            interceptor = workload.WorkloadResponseInterceptor()
+            yield from interceptor.send(workload.checkpoint_workload())
+            nonlocal latest_checkpoint, latest_batch
+            latest_checkpoint = interceptor.metrics_result()["uuid"]
+            latest_batch = trainer.get_latest_batch()
+
+        controller1 = utils.make_trial_controller_from_trial_implementation(
+            trial_class=deepspeed_linear_model.LinearDeepSpeedTrial,
+            hparams=self.hparams,
+            workloads=make_workloads_1(),
+            trial_seed=self.trial_seed,
+            checkpoint_dir=checkpoint_dir,
+            expose_gpus=True,
+        )
+        controller1.run()
+
+        # Verify that an invalid architecture fails to load from the checkpoint.
+        def make_workloads_2() -> workload.Stream:
+            trainer = utils.TrainAndValidate()
+            yield from trainer.send(
+                steps=1,
+                validation_freq=1,
+                train_batch_calls=self.data_parallel_only_auto_train_batch_calls,
+            )
+
+        with pytest.raises(AssertionError):
+            controller2 = utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.LinearTwoEngineTrial,
+                hparams=self.hparams,
+                workloads=make_workloads_2(),
+                trial_seed=self.trial_seed,
+                checkpoint_dir=checkpoint_dir,
+                latest_checkpoint=latest_checkpoint,
+                latest_batch=latest_batch,
+                expose_gpus=True,
+            )
+            controller2.run()
+
+    def test_reproducibility(self) -> None:
+        def controller_fn(workloads: workload.Stream) -> determined.TrialController:
+            return utils.make_trial_controller_from_trial_implementation(
+                trial_class=deepspeed_linear_model.LinearPipelineEngineTrial,
+                hparams=self.hparams,
+                workloads=workloads,
+                trial_seed=self.trial_seed,
+                expose_gpus=True,
+            )
+
+        utils.reproducibility_test(controller_fn, steps=1000, validation_freq=100)
 
     def test_callbacks(self, tmp_path: pathlib.Path) -> None:
         checkpoint_dir = tmp_path.joinpath("checkpoint")

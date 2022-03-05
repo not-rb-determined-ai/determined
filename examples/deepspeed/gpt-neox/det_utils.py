@@ -14,8 +14,13 @@ from determined.tensorboard.metric_writers.pytorch import TorchWriter
 
 def calculate_batch_size(args):
     if "train_micro_batch_size_per_gpu" in args.overwrite_values:
-        micro_cross_slot_batch_size = args.data_parallel_world_size * args.overwrite_values.train_micro_batch_size_per_gpu
-        return (args.global_batch_size // micro_cross_slot_batch_size) * micro_cross_slot_batch_size
+        micro_cross_slot_batch_size = (
+            args.data_parallel_world_size
+            * args.overwrite_values.train_micro_batch_size_per_gpu
+        )
+        return (
+            args.global_batch_size // micro_cross_slot_batch_size
+        ) * micro_cross_slot_batch_size
     return args.global_batch_size
 
 
@@ -24,13 +29,15 @@ def get_neox_args(context):
     exp_config = context.get_experiment_config()
     if args.search_world_size:
         args.overwrite_values["model_parallel_size"] = (
-                context.distributed.get_size() //
-                args.data_parallel_world_size //
-                args.overwrite_values.pipe_parallel_size
+            context.distributed.get_size()
+            // args.data_parallel_world_size
+            // args.overwrite_values.pipe_parallel_size
         )
         print(args.overwrite_values)
     context.env._global_batch_size = calculate_batch_size(args)
-    context.env._per_slot_batch_size = context.env.global_batch_size // args.data_parallel_world_size
+    context.env._per_slot_batch_size = (
+        context.env.global_batch_size // args.data_parallel_world_size
+    )
     args.global_batch_size = context.env.global_batch_size
     print(context.get_global_batch_size(), context.get_per_slot_batch_size())
 
@@ -39,10 +46,10 @@ def get_neox_args(context):
     # We are going to overwrite certain neox_args with determined config values
     # from the experiment config to ensure consistency.
     assert (
-            "batches" in exp_config["searcher"]["max_length"]
+        "batches" in exp_config["searcher"]["max_length"]
     ), "Please specify max_length in batches."
     assert (
-            "batches" in exp_config["min_validation_period"]
+        "batches" in exp_config["min_validation_period"]
     ), "Please specify min_validation_period in batches."
     overwrite_values.update(
         {

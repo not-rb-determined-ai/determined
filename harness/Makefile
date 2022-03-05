@@ -20,9 +20,18 @@ check: check-gen
 	flake8
 	mypy .
 
+.PHONY: test-cpu
+test-cpu: gen
+	pytest -v --runslow --durations=0 -m "not gpu" tests
+
+.PHONY: test-gpu
+test-gpu: gen
+	pytest -v --runslow --durations=0 -m "gpu" tests
+
 .PHONY: test
-test: gen
-	pytest -v --runslow --durations=0 tests
+test: 
+	# Since not everyone has a GPU on their dev machine, we only run cpu tests.
+	$(MAKE) test-cpu
 
 .PHONY: test-tf2
 test-tf2:

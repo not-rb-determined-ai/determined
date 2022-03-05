@@ -12,7 +12,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from determined.pytorch import DataLoader
-from determined.pytorch.deepspeed import DeepSpeedTrial, DeepSpeedTrialContext, overwrite_deepspeed_config
+from determined.pytorch.deepspeed import (
+    DeepSpeedTrial,
+    DeepSpeedTrialContext,
+    overwrite_deepspeed_config,
+)
 
 
 class Net(nn.Module):
@@ -92,8 +96,7 @@ class CIFARTrial(DeepSpeedTrial):
             parameters = create_moe_param_groups(model)
 
         ds_config = overwrite_deepspeed_config(
-            self.args.deepspeed_config, 
-            self.args.get("overwrite_deepspeed_args", {})
+            self.args.deepspeed_config, self.args.get("overwrite_deepspeed_args", {})
         )
 
         model_engine, optimizer, __, __ = deepspeed.initialize(

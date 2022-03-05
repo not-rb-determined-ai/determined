@@ -14,7 +14,7 @@ from determined.pytorch.deepspeed import (
     DeepSpeedMPU,
     DeepSpeedTrial,
     DeepSpeedTrialContext,
-    overwrite_deepspeed_config
+    overwrite_deepspeed_config,
 )
 
 
@@ -54,8 +54,7 @@ class CIFARTrial(DeepSpeedTrial):
         )
 
         ds_config = overwrite_deepspeed_config(
-            self.args.deepspeed_config, 
-            self.args.get("overwrite_deepspeed_args", {})
+            self.args.deepspeed_config, self.args.get("overwrite_deepspeed_args", {})
         )
         model_engine, optimizer, _, _ = deepspeed.initialize(
             args=self.args,

@@ -1,4 +1,4 @@
-name: cifar10_pipeline_parallel
+name: cifar10_pipeline_parallel_deepspeed
 debug: false
 hyperparameters:
   global_batch_size: 256
